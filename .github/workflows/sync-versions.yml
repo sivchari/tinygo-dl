@@ -1,0 +1,42 @@
+name: Sync TinyGo versions
+
+on:
+  schedule:
+    - cron: "0 */6 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+
+      - name: Find versions newer than the latest wrapper
+        id: versions
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          latest=$(ls -d tinygo*/ | sed 's#^tinygo##; s#/$##' | sort -V | tail -n 1)
+          new=$( { echo "$latest"; gh api --paginate repos/tinygo-org/tinygo/releases \
+            --jq '.[] | select((.draft or .prerelease) | not) | .tag_name | ltrimstr("v")'; } \
+            | sort -uV | awk -v latest="$latest" 'found { print } $0 == latest { found = 1 }' | xargs)
+          echo "versions=${new}" >> "$GITHUB_OUTPUT"
+
+      - name: Generate wrappers
+        if: steps.versions.outputs.versions != ''
+        run: go run ./internal/genv ${{ steps.versions.outputs.versions }}
+
+      - uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          branch: sync-versions
+          title: "Add TinyGo ${{ steps.versions.outputs.versions }}"
+          commit-message: "Add TinyGo ${{ steps.versions.outputs.versions }}"
+          body: "Adds wrapper packages for newly released TinyGo versions."
