@@ -2,31 +2,17 @@
 package main
 
 import (
+	_ "embed"
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"text/template"
 )
 
-var versionRE = regexp.MustCompile(`^\d+(\.\d+)+$`)
+//go:embed main.go.tmpl
+var mainGo string
 
-var tmpl = template.Must(template.New("main.go").Parse(`// The tinygo{{.}} command runs TinyGo {{.}}.
-//
-// To install, run:
-//
-//	go install github.com/sivchari/tinygo-dl/tinygo{{.}}@latest
-//	tinygo{{.}} download
-//
-// And then use the tinygo{{.}} command as if it were your normal tinygo command.
-package main
-
-import "github.com/sivchari/tinygo-dl/internal/version"
-
-func main() {
-	version.Run("tinygo{{.}}")
-}
-`))
+var tmpl = template.Must(template.New("main.go").Parse(mainGo))
 
 func main() {
 	if len(os.Args) < 2 {
@@ -34,28 +20,25 @@ func main() {
 		os.Exit(1)
 	}
 	for _, v := range os.Args[1:] {
-		if !versionRE.MatchString(v) {
-			fmt.Fprintf(os.Stderr, "genv: invalid version %q: must match %s\n", v, versionRE)
-			os.Exit(1)
-		}
-		dir := "tinygo" + v
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			fmt.Fprintf(os.Stderr, "genv: %v\n", err)
-			os.Exit(1)
-		}
-		f, err := os.Create(filepath.Join(dir, "main.go"))
-		if err != nil {
-			fmt.Fprintf(os.Stderr, "genv: %v\n", err)
-			os.Exit(1)
-		}
-		if err := tmpl.Execute(f, v); err != nil {
-			f.Close()
-			fmt.Fprintf(os.Stderr, "genv: %v\n", err)
-			os.Exit(1)
-		}
-		if err := f.Close(); err != nil {
+		if err := generate(v); err != nil {
 			fmt.Fprintf(os.Stderr, "genv: %v\n", err)
 			os.Exit(1)
 		}
 	}
+}
+
+func generate(version string) error {
+	dir := "tinygo" + version
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	f, err := os.Create(filepath.Join(dir, "main.go"))
+	if err != nil {
+		return err
+	}
+	if err := tmpl.Execute(f, version); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }
