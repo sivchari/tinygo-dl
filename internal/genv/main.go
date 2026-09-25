@@ -9,7 +9,7 @@ import (
 	"text/template"
 )
 
-var versionRE = regexp.MustCompile(`^\d+\.\d+\.\d+$`)
+var versionRE = regexp.MustCompile(`^\d+(\.\d+)+$`)
 
 var tmpl = template.Must(template.New("main.go").Parse(`// The tinygo{{.}} command runs TinyGo {{.}}.
 //
